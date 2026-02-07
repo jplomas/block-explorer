@@ -11,22 +11,21 @@ let isChartInitialized = false
 let userHasInteracted = false
 let lastDataLength = 0
 let currentViewRange = { min: 0, max: 0 }
-let lastProcessedData = null // Track the last data we processed
+let lastProcessedData = null
 
-// Load ApexCharts from CDN
+// Load ApexCharts from CDN with pinned version and SRI
 function loadApexCharts() {
   return new Promise((resolve, reject) => {
     if (window.ApexCharts) {
-      console.log('ApexCharts already loaded')
       resolve(window.ApexCharts)
       return
     }
 
-    console.log('Loading ApexCharts from CDN...')
     const script = document.createElement('script')
-    script.src = 'https://cdn.jsdelivr.net/npm/apexcharts@latest'
+    script.src = 'https://cdn.jsdelivr.net/npm/apexcharts@3.44.0/dist/apexcharts.min.js'
+    script.integrity = 'sha384-S+z6GyrrYmfdZiLuK+I0tCaabgSR/FH/+NIE3Xgu9W9UL0sFgPzGgoXVfwBeviXD'
+    script.crossOrigin = 'anonymous'
     script.onload = () => {
-      console.log('ApexCharts loaded successfully')
       resolve(window.ApexCharts)
     }
     script.onerror = () => {
@@ -64,27 +63,30 @@ async function initializeChart(dataToUse, isSampleData = false) {
   const chartContainer = document.getElementById('chart-container')
 
   if (!chartContainer) {
-    console.error('Chart container not found!')
     return
   }
 
   try {
+    // Guard against empty data
+    if (!dataToUse.labels || dataToUse.labels.length === 0) {
+      return
+    }
+
     // Clear any existing chart
     chartContainer.innerHTML = ''
 
     // Load ApexCharts
     const ApexCharts = await loadApexCharts()
 
-    // Transform data for ApexCharts
+    // Transform data for ApexCharts — only include data points that have matching labels
+    const labelCount = dataToUse.labels.length
     const series = dataToUse.datasets.map((dataset) => ({
       name: dataset.label,
-      data: dataset.data.map((value, index) => ({
+      data: dataset.data.slice(0, labelCount).map((value, index) => ({
         x: dataToUse.labels[index],
         y: value,
       })),
     }))
-
-    console.log('Initializing ApexCharts with series:', series)
 
     // Start with the most zoomed out view - show all available data
     const maxBlock = Math.max(...dataToUse.labels)
@@ -116,33 +118,25 @@ async function initializeChart(dataToUse, isSampleData = false) {
             speed: 350,
           },
         },
-        // Enable real-time updates
         redrawOnParentResize: true,
         redrawOnWindowResize: true,
-        // Track user interactions
         events: {
           zoom(chartContext, { xaxis }) {
-            console.log('User zoomed chart')
             userHasInteracted = true
-            // Update our tracking of current view
             currentViewRange = {
               min: xaxis.min,
               max: xaxis.max,
             }
           },
           pan(chartContext, { xaxis }) {
-            console.log('User panned chart')
             userHasInteracted = true
-            // Update our tracking of current view
             currentViewRange = {
               min: xaxis.min,
               max: xaxis.max,
             }
           },
           selection(chartContext, { xaxis }) {
-            console.log('User selected range')
             userHasInteracted = true
-            // Update our tracking of current view
             currentViewRange = {
               min: xaxis.min,
               max: xaxis.max,
@@ -182,9 +176,8 @@ async function initializeChart(dataToUse, isSampleData = false) {
             fontWeight: 500,
           },
           formatter(value) {
-            // Show more labels with better formatting
             const roundedValue = Math.round(value)
-            if (roundedValue % 5 === 0) { // Show every 5th block instead of 10th
+            if (roundedValue % 5 === 0) {
               return roundedValue.toLocaleString()
             }
             return ''
@@ -193,15 +186,14 @@ async function initializeChart(dataToUse, isSampleData = false) {
           trim: false,
           hideOverlappingLabels: false,
         },
-        // Show more labels
         tickAmount: 12,
         tickPlacement: 'between',
         forceNiceScale: true,
       },
       yaxis: [
         {
-          // Left Y-axis for Hash Power and Difficulty
-          seriesName: ['Hash Power (hps)', 'Difficulty'],
+          // Left Y-axis for Hash Power (series index 0)
+          seriesName: 'Hash Power (hps)',
           title: {
             text: 'Hash Power / Difficulty',
             style: {
@@ -221,11 +213,33 @@ async function initializeChart(dataToUse, isSampleData = false) {
           },
         },
         {
-          // Right Y-axis for Block Time
+          // Left Y-axis for Difficulty (series index 1) — shares axis with Hash Power
+          seriesName: 'Difficulty',
+          show: false,
+          labels: {
+            formatter(value) {
+              return value.toLocaleString()
+            },
+          },
+        },
+        {
+          // Right Y-axis for Block Time (series index 2) — shares axis with Block Time Average
+          seriesName: 'Block Time (s)',
+          opposite: true,
+          show: false,
+          min: 0,
+          labels: {
+            formatter(value) {
+              return `${value.toFixed(1)}s`
+            },
+          },
+        },
+        {
+          // Right Y-axis for Block Time Average (series index 3)
           seriesName: 'Block Time Average (s)',
           opposite: true,
           title: {
-            text: 'Block Time Average (s)',
+            text: 'Block Time (s)',
             style: {
               color: isDark ? '#EAEFF5' : '#0B181E',
               fontSize: '12px',
@@ -242,7 +256,6 @@ async function initializeChart(dataToUse, isSampleData = false) {
             },
           },
           min: 0,
-          max: undefined, // Let it auto-scale
         },
       ],
       tooltip: {
@@ -257,7 +270,6 @@ async function initializeChart(dataToUse, isSampleData = false) {
           },
         },
       },
-      // Enable smooth scrolling for real-time updates
       dataLabels: {
         enabled: false,
       },
@@ -283,21 +295,21 @@ async function initializeChart(dataToUse, isSampleData = false) {
     currentChart = new ApexCharts(chartContainer, options)
     await currentChart.render()
 
-    console.log('ApexCharts initialized successfully')
     isChartInitialized = true
     lastDataLength = dataToUse.labels.length
-    lastProcessedData = dataToUse // Store the initial data
+    lastProcessedData = dataToUse
   } catch (error) {
     console.error('Error initializing ApexCharts:', error)
-    chartContainer.innerHTML = `<div class="flex items-center justify-center h-full text-red-400">Error loading chart: ${error.message}</div>`
-    Session.set('nodeError', true)
+    chartContainer.innerHTML = '<div class="flex items-center justify-center h-full text-red-400">Error loading chart. Retrying...</div>'
+    // Don't set nodeError for chart rendering failures — the node connection may be fine.
+    // Reset chart state so it retries on next renderChart() call.
+    isChartInitialized = false
   }
 }
 
 // Update chart with new data (only add new points, don't change existing)
 async function updateChart(newData) {
   if (!currentChart || !isChartInitialized) {
-    console.log('Chart not initialized yet, skipping update')
     return
   }
 
@@ -307,11 +319,8 @@ async function updateChart(newData) {
     const hasNewData = currentDataLength > lastDataLength
 
     if (!hasNewData) {
-      console.log('No new data to add, skipping update')
       return
     }
-
-    console.log(`Adding ${currentDataLength - lastDataLength} new data points`)
 
     // Only add the new data points, don't change existing ones
     const newSeries = newData.datasets.map((dataset, datasetIndex) => {
@@ -328,78 +337,59 @@ async function updateChart(newData) {
       }
     })
 
-    console.log('Adding new data points:', newSeries)
-
     // Add new data points to the chart (this preserves existing data)
-    await currentChart.appendData(newSeries, true) // true = animate
+    await currentChart.appendData(newSeries, true)
 
     // Only auto-scroll if user hasn't interacted with the chart
     if (!userHasInteracted && newData.labels.length > 0) {
       const latestBlock = Math.max(...newData.labels)
       const viewWidth = currentViewRange.max - currentViewRange.min
 
-      console.log('Auto-scrolling to show latest data')
-
       // Calculate new view range - scroll to the right to show latest data
-      const newMin = Math.max(0, latestBlock - viewWidth + 20) // Keep same width, show latest data
-      const newMax = latestBlock + 20 // Add some padding
+      const newMin = Math.max(0, latestBlock - viewWidth + 20)
+      const newMax = latestBlock + 20
 
       // Update our tracking
       currentViewRange = { min: newMin, max: newMax }
 
       // Smooth scroll to new range
-      await currentChart.zoomX(newMin, newMax, true) // true = animate
-    } else if (userHasInteracted) {
-      console.log('User has interacted with chart, not auto-scrolling')
+      await currentChart.zoomX(newMin, newMax, true)
     }
 
     // Update tracking variables
     lastDataLength = currentDataLength
-    lastProcessedData = newData // Store the updated data
+    lastProcessedData = newData
   } catch (error) {
     console.error('Error updating chart:', error)
   }
 }
 
 function renderChart() {
-  console.log('renderChart called')
-
   // Get Chart data from Mongo
   const chartLineData = homechart.findOne()
 
   // Check if subscription is ready
   if (!chartLineData) {
-    console.log('No chart data found in collection')
-    console.log('Collection count:', homechart.find().count())
-    console.log('All collection data:', homechart.find().fetch())
-    console.log('Chart data not ready yet, waiting for subscription...')
     return
   }
-  console.log('Chart data:', chartLineData)
 
   const dataToUse = chartLineData
 
-  if (dataToUse !== undefined && dataToUse.labels && dataToUse.datasets) {
-    console.log('Valid chart data found, hiding loading...')
-
+  if (dataToUse !== undefined && dataToUse.labels && dataToUse.labels.length > 0 && dataToUse.datasets && dataToUse.datasets.length > 0) {
     // Hide loading animation
     const chartLoading = document.getElementById('chartLoading')
     if (chartLoading) {
       chartLoading.style.display = 'none'
-      console.log('Loading element hidden successfully')
     }
 
     // If chart is not initialized, initialize it
     if (!isChartInitialized) {
-      console.log('Initializing chart for the first time...')
       initializeChart(dataToUse, false)
     } else {
       // Chart is already initialized, just update it smoothly
-      console.log('Updating existing chart...')
       updateChart(dataToUse)
     }
   } else {
-    console.log('No valid chart data available yet')
     // Show waiting message
     const chartContainer = document.getElementById('chart-container')
     if (chartContainer) {
@@ -418,15 +408,11 @@ function renderChart() {
 
 // Subscribe to chart data
 Template.appHome.onCreated(function () {
-  console.log('Subscribing to homechart...')
   this.subscribe('homechart')
-  console.log('Subscription started')
 })
 
 // Initialize chart when template is rendered
 Template.appHome.onRendered(() => {
-  console.log('Template rendered, initializing chart...')
-
   // Set up reactive autorun to update chart when data changes
   Tracker.autorun(() => {
     renderChart()
@@ -435,7 +421,7 @@ Template.appHome.onRendered(() => {
   // Set up auto-refresh with shorter interval for smoother updates
   chartIntervalHandle = Meteor.setInterval(() => {
     renderChart()
-  }, 30000) // Refresh every 30 seconds for smoother updates
+  }, 30000)
 })
 
 // Clean up when template is destroyed

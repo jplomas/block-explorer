@@ -110,7 +110,7 @@ async function OTS(obj) {
 
   if (!obj || typeof obj !== 'object') {
     console.error('OTS: Invalid object received:', obj)
-    Session.set('OTStracker', '<div class="p-2 text-center text-xs text-red-400">No OTS data available</div>')
+    Session.set('OTStracker', [])
     return
   }
 
@@ -120,73 +120,21 @@ async function OTS(obj) {
 
   if (k.length === 0) {
     console.log('OTS: No keys found in object')
-    Session.set('OTStracker', '<div class="p-2 text-center text-xs text-gray-400">No OTS keys found</div>')
+    Session.set('OTStracker', [])
     return
   }
 
-  // Count used vs unused keys
-  let usedCount = 0
-  let unusedCount = 0
-  k.forEach((val) => {
-    if (obj[val] === 1) {
-      usedCount++
-    } else {
-      unusedCount++
-    }
-  })
+  // Build structured data array instead of raw HTML
+  const otsKeys = k.map((val) => ({
+    index: val,
+    used: obj[val] === 1,
+    tooltip: obj[val] === 1 ? `Key ${val}: USED` : `Key ${val}: Available`,
+  }))
 
-  console.log(`OTS: ${usedCount} used keys, ${unusedCount} unused keys`)
+  console.log('OTS keys data:', otsKeys.length, 'keys')
+  Session.set('OTStracker', otsKeys)
 
-  // Generate clean HTML without any row breaking
-  let cellsHTML = ''
-  k.forEach((val) => {
-    let cellClass = 'p-1 sm:p-2 text-center text-sm sm:text-base font-mono border rounded '
-    let iconHTML = ''
-
-    let tooltip = ''
-    if (obj[val] === 1) {
-      cellClass += 'bg-red-500/20 border-gray-500/30 text-red-400'
-      iconHTML = '<i data-lucide="x-circle" class="w-2 h-2 sm:w-3 sm:h-3 inline-block mr-1"></i>'
-      tooltip = `Key ${val}: USED`
-    } else {
-      cellClass += 'bg-green-500/20 border-gray-500/30 text-green-300'
-      iconHTML = '<i data-lucide="circle" class="w-2 h-2 sm:w-3 sm:h-3 inline-block mr-1"></i>'
-      tooltip = `Key ${val}: Available`
-    }
-
-    cellsHTML += `<div class="${cellClass}" title="${tooltip}">${iconHTML}${val}</div>\n`
-  })
-
-  console.log('Generated cells HTML:', cellsHTML)
-
-  // Generate proper OTS cells with responsive grid (max 10 columns)
-  const html = `
-    <style>
-      .ots-responsive-grid {
-        display: grid;
-        grid-template-columns: repeat(5, 1fr);
-        gap: 4px;
-        width: 100%;
-      }
-      @media (min-width: 640px) {
-        .ots-responsive-grid { grid-template-columns: repeat(8, 1fr); }
-      }
-      @media (min-width: 768px) {
-        .ots-responsive-grid { grid-template-columns: repeat(10, 1fr); }
-      }
-      @media (min-width: 1024px) {
-        .ots-responsive-grid { grid-template-columns: repeat(10, 1fr); }
-      }
-      @media (min-width: 1280px) {
-        .ots-responsive-grid { grid-template-columns: repeat(10, 1fr); }
-      }
-    </style>
-    <div class="ots-responsive-grid">${cellsHTML}</div>
-  `
-  console.log('Final OTS HTML:', html)
-  Session.set('OTStracker', html)
-
-  // Re-initialize Lucide icons for the new HTML
+  // Re-initialize Lucide icons for the new content
   if (window.reinitializeLucideIcons) {
     setTimeout(() => {
       window.reinitializeLucideIcons()

@@ -740,7 +740,23 @@
               </div>
             </div>
             <div class="card">
-              {{{OTStracker}}}
+              {{#if OTStracker.length}}
+                <div class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-1">
+                  {{#each OTStracker}}
+                    {{#if this.used}}
+                      <div class="p-1 sm:p-2 text-center text-sm sm:text-base font-mono border rounded bg-red-500/20 border-gray-500/30 text-red-400" title="{{this.tooltip}}">
+                        <i data-lucide="x-circle" class="w-2 h-2 sm:w-3 sm:h-3 inline-block mr-1"></i>{{this.index}}
+                      </div>
+                    {{else}}
+                      <div class="p-1 sm:p-2 text-center text-sm sm:text-base font-mono border rounded bg-green-500/20 border-gray-500/30 text-green-300" title="{{this.tooltip}}">
+                        <i data-lucide="circle" class="w-2 h-2 sm:w-3 sm:h-3 inline-block mr-1"></i>{{this.index}}
+                      </div>
+                    {{/if}}
+                  {{/each}}
+                </div>
+              {{else}}
+                <div class="p-2 text-center text-xs text-gray-400">Loading OTS data...</div>
+              {{/if}}
             </div>
           </div>
 
