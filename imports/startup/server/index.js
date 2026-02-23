@@ -1448,7 +1448,6 @@ Meteor.methods({
 
   async status() {
     console.log('status method called')
-    // avoid blocking other method calls from same client - *may need to remove for production*
     this.unblock()
     // asynchronous call to API
     const response = await getStatsAsync({})
@@ -1457,7 +1456,6 @@ Meteor.methods({
 
   async lastblocks() {
     console.log('lastblocks method called')
-    // avoid blocking other method calls from same client - *may need to remove for production*
     this.unblock()
     // asynchronous call to API
     const response = await getLatestDataAsync({
@@ -1470,7 +1468,6 @@ Meteor.methods({
 
   async lastunconfirmedtx() {
     console.log('lastunconfirmedtx method called')
-    // avoid blocking other method calls from same client - *may need to remove for production*
     this.unblock()
     // asynchronous call to API
     const response = await getLatestDataAsync({
@@ -1489,7 +1486,6 @@ Meteor.methods({
   async txhash(txId) {
     check(txId, String)
     console.log(`txhash method called for: ${txId}`)
-    // avoid blocking other method calls from same client - *may need to remove for production*
     this.unblock()
     if (!(Match.test(txId, String) && txId.length === 64)) {
       const errorCode = 400
@@ -1541,8 +1537,7 @@ Meteor.methods({
       console.log('Throwing invalid block number error')
       throw new Meteor.Error(errorCode, errorMessage)
     } else {
-      // avoid blocking other method calls from same client - *may need to remove for production*
-      this.unblock()
+        this.unblock()
       // first check this is not cached
       const queryResults = await blockData.findOneAsync({ blockId })
       if (queryResults !== undefined) {
@@ -1996,6 +1991,13 @@ Meteor.methods({
     const firstNode = activeNodes[0].substring(0, 7)
     const res = { colour: 'green', network: firstNode }
     return res
+  },
+
+  async lasttxPaged() {
+    console.log('lasttxPaged method called')
+    this.unblock()
+    const res = await lasttx.findOneAsync()
+    return res || { transactions: [] }
   },
 })
 

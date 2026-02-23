@@ -29,6 +29,74 @@ Template.lasttx.onCreated(() => {
 })
 
 Template.lasttx.helpers({
+  isHome() {
+    return FlowRouter.getRouteName() === 'App.home'
+  },
+  isLastTx() {
+    return FlowRouter.getRouteName() === 'Lasttx.home'
+  },
+  currentPage() {
+    const page = parseInt(FlowRouter.getQueryParam('page'), 10) || 1
+    return page
+  },
+  totalPages() {
+    const res = lasttx.findOne({ _id: 'lasttx_singleton' })
+    if (res && res.transactions) {
+      return Math.ceil(res.transactions.length / 10) || 1
+    }
+    return 1
+  },
+  pagedTransactions() {
+    const res = lasttx.findOne({ _id: 'lasttx_singleton' })
+    if (res && res.transactions) {
+      if (FlowRouter.getRouteName() === 'App.home') {
+        return res.transactions.slice(0, 10)
+      }
+      const page = parseInt(FlowRouter.getQueryParam('page'), 10) || 1
+      const start = (page - 1) * 10
+      return res.transactions.slice(start, start + 10)
+    }
+    return []
+  },
+  pages() {
+    const res = lasttx.findOne({ _id: 'lasttx_singleton' })
+    if (res && res.transactions) {
+      const totalPages = Math.ceil(res.transactions.length / 10)
+      const pages = []
+      for (let i = 1; i <= totalPages; i += 1) {
+        pages.push({
+          number: i,
+          isActive: (parseInt(FlowRouter.getQueryParam('page'), 10) || 1) === i,
+        })
+      }
+      // Simple pagination: show current page and a few around it if many
+      const currentPage = parseInt(FlowRouter.getQueryParam('page'), 10) || 1
+      if (pages.length <= 10) {
+        return pages
+      }
+      if (currentPage <= 5) {
+        return pages.slice(0, 9)
+      }
+      if (currentPage > pages.length - 5) {
+        return pages.slice(pages.length - 9)
+      }
+      return pages.slice(currentPage - 5, currentPage + 4)
+    }
+    return []
+  },
+  pback() {
+    const currentPage = parseInt(FlowRouter.getQueryParam('page'), 10) || 1
+    return currentPage > 1
+  },
+  pforward() {
+    const res = lasttx.findOne({ _id: 'lasttx_singleton' })
+    if (res && res.transactions) {
+      const totalPages = Math.ceil(res.transactions.length / 10)
+      const currentPage = parseInt(FlowRouter.getQueryParam('page'), 10) || 1
+      return currentPage < totalPages
+    }
+    return false
+  },
   multipleDestinations() {
     if (this.explorer.outputs) {
       if (this.explorer.outputs.length > 1) {
@@ -38,7 +106,7 @@ Template.lasttx.helpers({
     return false
   },
   lasttx() {
-    const res = lasttx.findOne()
+    const res = lasttx.findOne({ _id: 'lasttx_singleton' })
     return res
   },
   fromAddress() {
@@ -79,13 +147,12 @@ Template.lasttx.helpers({
   },
   zeroCheck() {
     let ret = false
-    const x = lasttx.findOne()
+    const x = lasttx.findOne({ _id: 'lasttx_singleton' })
     if (x) {
-      if (x.length === 0) {
+      if (x.transactions && x.transactions.length === 0) {
         ret = true
       }
-    }
-    if (x === undefined) {
+    } else {
       ret = true
     }
     return ret
@@ -284,6 +351,44 @@ Template.lasttx.events({
     if (hashElement) {
       const transactionHash = hashElement.getAttribute('data-full-text')
       FlowRouter.go(`/tx/${transactionHash}`)
+      window.scrollTo(0, 0)
+    }
+  },
+  'keypress #paginator': (event) => {
+    if (event.keyCode === 13) {
+      const x = parseInt(document.getElementById('paginator').value, 10)
+      const res = lasttx.findOne({ _id: 'lasttx_singleton' })
+      if (res && res.transactions) {
+        const totalPages = Math.ceil(res.transactions.length / 10) || 1
+        if (x <= totalPages && x > 0) {
+          FlowRouter.setQueryParams({ page: x })
+          window.scrollTo(0, 0)
+        }
+      }
+    }
+  },
+  'click button[qrl-data]': (event) => {
+    const action = event.currentTarget.getAttribute('qrl-data')
+    const currentPage = parseInt(FlowRouter.getQueryParam('page'), 10) || 1
+    const res = lasttx.findOne({ _id: 'lasttx_singleton' })
+    if (res && res.transactions) {
+      const totalPages = Math.ceil(res.transactions.length / 10) || 1
+      let newPage = currentPage
+      if (action === 'forward') {
+        newPage += 1
+      } else if (action === 'back') {
+        newPage -= 1
+      }
+      if (newPage <= totalPages && newPage > 0) {
+        FlowRouter.setQueryParams({ page: newPage })
+        window.scrollTo(0, 0)
+      }
+    }
+  },
+  'click .page-btn': (event) => {
+    const newPage = parseInt(event.currentTarget.getAttribute('qrl-page'), 10)
+    if (newPage) {
+      FlowRouter.setQueryParams({ page: newPage })
       window.scrollTo(0, 0)
     }
   },
