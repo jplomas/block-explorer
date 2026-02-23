@@ -77,30 +77,45 @@ const refreshBlocks = async () => {
   }
 
   // Fetch current data
-  const current = await Blocks.findOneAsync()
+  const currentDoc = await Blocks.findOneAsync({ _id: 'blocks_singleton' })
+  const existingHeaders = (currentDoc && currentDoc.blockheaders) || []
 
-  // On vanilla build, current will be undefined so we can just insert data
-  if (current === undefined) {
-    await Blocks.insertAsync(response)
+  // Merge new with existing, deduplicating by block number
+  let allHeaders = [...response.blockheaders, ...existingHeaders]
+  const seenNumbers = new Set()
+  allHeaders = allHeaders.filter((bh) => {
+    if (!bh || !bh.header || !bh.header.block_number) return false
+    if (seenNumbers.has(bh.header.block_number)) return false
+    seenNumbers.add(bh.header.block_number)
+    return true
+  })
+
+  // Sort by block number descending
+  allHeaders.sort((a, b) => (b.header.block_number - a.header.block_number))
+
+  // Limit to 100 blocks
+  if (allHeaders.length > 100) {
+    allHeaders = allHeaders.slice(0, 90) // Drop oldest 10 when we hit/exceed limit
+  }
+
+  const merged = {
+    blockheaders: allHeaders,
+  }
+
+  // Only update if data has actually changed to prevent UI flicker
+  let hasChanged = false
+  if (!currentDoc || !currentDoc.blockheaders || currentDoc.blockheaders.length !== merged.blockheaders.length) {
+    hasChanged = true
   } else {
-    // Only update if data has changed.
-    let newData = false
-    _.each(response.blockheaders, (newBlock) => {
-      let thisFound = false
-      _.each(current.blockheaders, (currentBlock) => {
-        if (currentBlock.header.block_number === newBlock.header.block_number) {
-          thisFound = true
-        }
-      })
-      if (thisFound === false) {
-        newData = true
-      }
-    })
-    if (newData === true) {
-      // Clear and update cache as it's changed
-      await Blocks.removeAsync({})
-      await Blocks.insertAsync(response)
+    // Check if newest block number changed
+    if (currentDoc.blockheaders[0].header.block_number !== merged.blockheaders[0].header.block_number) {
+      hasChanged = true
     }
+  }
+
+  if (hasChanged) {
+    // Use upsert with a fixed ID to prevent collection wipe flicker
+    await Blocks.upsertAsync({ _id: 'blocks_singleton' }, { $set: merged })
   }
 
   const lastHeader = response.blockheaders[
@@ -178,55 +193,61 @@ async function refreshLasttx() {
     return
   }
 
-  // Merge the two together
-  const confirmedTxns = await makeTxListHumanReadable(confirmed.transactions, true)
-  const unconfirmedTxns = await makeTxListHumanReadable(
+  // Convert to human readable
+  const newConfirmedTxns = await makeTxListHumanReadable(confirmed.transactions, true)
+  const newUnconfirmedTxns = await makeTxListHumanReadable(
     unconfirmed.transactions_unconfirmed,
     false,
   )
-  const merged = {}
-  merged.transactions = unconfirmedTxns.concat(confirmedTxns)
 
   // Fetch current data
-  const current = await lasttx.findOneAsync()
+  const currentDoc = await lasttx.findOneAsync()
+  const existingTransactions = (currentDoc && currentDoc.transactions) || []
 
-  // On vanilla build, current will be undefined so we can just insert data
-  if (current === undefined) {
-    await lasttx.insertAsync(merged)
+  // Filter out existing confirmed transactions
+  let existingConfirmed = existingTransactions.filter((tx) => tx.tx.confirmed === 'true')
+
+  // Merge new confirmed with existing, deduplicating by hash
+  let allConfirmed = [...newConfirmedTxns, ...existingConfirmed]
+  const seenHashes = new Set()
+  allConfirmed = allConfirmed.filter((tx) => {
+    if (!tx || !tx.tx || !tx.tx.transaction_hash) return false
+    if (seenHashes.has(tx.tx.transaction_hash)) return false
+    seenHashes.add(tx.tx.transaction_hash)
+    return true
+  })
+
+  // Sort by block number descending
+  allConfirmed.sort((a, b) => (b.header.block_number - a.header.block_number))
+
+  // Limit to 100 confirmed transactions
+  if (allConfirmed.length > 100) {
+    allConfirmed = allConfirmed.slice(0, 90) // Drop oldest 10 when we hit/exceed limit
+  }
+
+  const merged = {
+    transactions: newUnconfirmedTxns.concat(allConfirmed),
+  }
+
+  // Only update if data has actually changed to prevent UI flicker
+  let hasChanged = false
+  if (!currentDoc || !currentDoc.transactions || currentDoc.transactions.length !== merged.transactions.length) {
+    hasChanged = true
   } else {
-    // Only update if data has changed.
-    let newData = false
-    _.each(merged.transactions, (newTxn) => {
-      let thisFound = false
-      _.each(current.transactions, (currentTxn) => {
-        // Find a matching pair of transactions by transaction hash
-        if (currentTxn.tx.transaction_hash === newTxn.tx.transaction_hash) {
-          try {
-            // If they both have null header (unconfirmed) there is no change
-            if (currentTxn.header === null && newTxn.header === null) {
-              thisFound = true
-              // If they have same block number, there is also no change.
-            } else if (
-              currentTxn.header.block_number === newTxn.header.block_number
-            ) {
-              thisFound = true
-            }
-          } catch (e) {
-            // Header in cached unconfirmed txn not found, we located a change
-            thisFound = false
-          }
-        }
-      })
-      if (thisFound === false) {
-        newData = true
+    // Check if any transaction hash or confirmed status changed at the same index
+    // (since they are sorted, this is a fast enough check)
+    for (let i = 0; i < merged.transactions.length; i += 1) {
+      if (currentDoc.transactions[i].tx.transaction_hash !== merged.transactions[i].tx.transaction_hash
+          || currentDoc.transactions[i].tx.confirmed !== merged.transactions[i].tx.confirmed) {
+        hasChanged = true
+        break
       }
-    })
-
-    if (newData === true) {
-      // Clear and update cache as it's changed
-      await lasttx.removeAsync({})
-      await lasttx.insertAsync(merged)
     }
+  }
+
+  if (hasChanged) {
+    // Use upsert with a fixed ID to prevent collection wipe flicker
+    await lasttx.upsertAsync({ _id: 'lasttx_singleton' }, { $set: merged })
   }
 }
 
@@ -249,9 +270,8 @@ async function refreshStats() {
 
   console.log('refreshStats: Processing data...')
 
-  // Save status object
-  await status.removeAsync({})
-  await status.insertAsync(res)
+  // Save status object with fixed ID to prevent flickering
+  await status.upsertAsync({ _id: 'status_singleton' }, { $set: res })
 
   // Start modifying data for home chart object
   const chartLineData = {
@@ -319,9 +339,8 @@ async function refreshStats() {
   chartLineData.datasets.push(blockTime)
   chartLineData.datasets.push(movingAverage)
 
-  // Save in mongo
-  await homechart.removeAsync({})
-  await homechart.insertAsync(chartLineData)
+  // Save in mongo with fixed ID to prevent flickering
+  await homechart.upsertAsync({ _id: 'homechart_singleton' }, { $set: chartLineData })
   console.log('refreshStats: Chart data inserted successfully')
 }
 
@@ -342,8 +361,7 @@ const refreshQuantaUsd = async () => {
     return
   }
 
-  await quantausd.removeAsync({})
-  await quantausd.insertAsync({ price })
+  await quantausd.upsertAsync({ _id: 'quantausd_singleton' }, { $set: { price } })
 }
 
 const refreshPeerStats = async () => {
@@ -381,9 +399,8 @@ const refreshPeerStats = async () => {
     )
   })
 
-  // Update mongo collection
-  await peerstats.removeAsync({})
-  await peerstats.insertAsync(response)
+  // Update mongo collection with fixed ID to prevent flickering
+  await peerstats.upsertAsync({ _id: 'peerstats_singleton' }, { $set: response })
 }
 
 // Refresh blocks every 20 seconds

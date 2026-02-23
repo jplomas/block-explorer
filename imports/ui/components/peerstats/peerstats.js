@@ -7,7 +7,7 @@ Template.peerstats.onCreated(() => {
 
 Template.peerstats.helpers({
   peerstats() {
-    const res = peerstats.findOne()
+    const res = peerstats.findOne({ _id: 'peerstats_singleton' })
     return res
   },
   ts() {
@@ -16,9 +16,14 @@ Template.peerstats.helpers({
   },
   zeroCheck() {
     let ret = false
-    const x = peerstats.findOne()
-    if (x) { if (x.length === 0) { ret = true } }
-    if (x === undefined) { ret = true }
+    const x = peerstats.findOne({ _id: 'peerstats_singleton' })
+    if (x) {
+      if (x.peers_stat && x.peers_stat.length === 0) {
+        ret = true
+      }
+    } else {
+      ret = true
+    }
     return ret
   },
 })

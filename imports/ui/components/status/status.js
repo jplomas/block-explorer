@@ -61,15 +61,15 @@ Template.status.onDestroyed(function () {
 
 Template.status.helpers({
   quantaUsd() {
-    const quote = quantausd.findOne()
+    const quote = quantausd.findOne({ _id: 'quantausd_singleton' })
     if (!quote || !Number.isFinite(quote.price)) {
       return '--'
     }
     return currencyFormatter.format(quote.price)
   },
   marketCap() {
-    const x = Session.get('explorer-status')
-    const quote = quantausd.findOne()
+    const x = status.findOne({ _id: 'status_singleton' })
+    const quote = quantausd.findOne({ _id: 'quantausd_singleton' })
 
     if (!x || !quote || !Number.isFinite(quote.price)) {
       return '--'
@@ -84,16 +84,18 @@ Template.status.helpers({
     return currencyFormatter.format(marketCap)
   },
   status() {
-    const response = Session.get('explorer-status')
+    const response = status.findOne({ _id: 'status_singleton' })
     return response
   },
   uptime() {
-    const x = Session.get('explorer-status')
+    const x = status.findOne({ _id: 'status_singleton' })
+    if (!x) return '--'
     const uptime = moment.duration(parseInt(x.uptime_network, 10), 'seconds')
     return moment.duration(uptime, 'seconds').format('D[d] h[h] m[min]')
   },
   emission() {
-    const x = Session.get('explorer-status')
+    const x = status.findOne({ _id: 'status_singleton' })
+    if (!x) return '--'
     let r = 'Undetermined'
     try {
       // eslint-disable-next-line
@@ -104,7 +106,8 @@ Template.status.helpers({
     return r
   },
   emission_raw() {
-    const x = Session.get('explorer-status')
+    const x = status.findOne({ _id: 'status_singleton' })
+    if (!x) return '--'
     let r = '?'
     try {
       r = (parseFloat(x.coins_emitted) / SHOR_PER_QUANTA)
@@ -116,7 +119,8 @@ Template.status.helpers({
     return r
   },
   totalSupply() {
-    const x = Session.get('explorer-status')
+    const x = status.findOne({ _id: 'status_singleton' })
+    if (!x) return '--'
     let r = 'Undetermined'
     try {
       r = supplyFormatter.format(parseFloat(x.coins_total_supply))
@@ -136,7 +140,8 @@ Template.status.helpers({
     return r
   },
   unmined() {
-    const x = Session.get('explorer-status')
+    const x = status.findOne({ _id: 'status_singleton' })
+    if (!x) return '--'
     let r = 'Undetermined'
     try {
       r = parseFloat(x.coins_total_supply) - (parseFloat(x.coins_emitted) / SHOR_PER_QUANTA)
@@ -148,7 +153,8 @@ Template.status.helpers({
     return r
   },
   max_block_index() {
-    const x = Session.get('explorer-status')
+    const x = status.findOne({ _id: 'status_singleton' })
+    if (!x) return '--'
     let r = 'Undetermined'
     try {
       r = x.node_info.block_height
@@ -158,7 +164,7 @@ Template.status.helpers({
     return r
   },
   timeSinceLastBlock() {
-    const blocksDocument = Blocks.findOne()
+    const blocksDocument = Blocks.findOne({ _id: 'blocks_singleton' })
     if (!blocksDocument || !Array.isArray(blocksDocument.blockheaders) || blocksDocument.blockheaders.length === 0) {
       return '--'
     }
