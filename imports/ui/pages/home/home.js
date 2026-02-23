@@ -507,7 +507,7 @@ async function updateChart(newData) {
 }
 
 async function renderChart() {
-  const chartLineData = homechart.findOne()
+  const chartLineData = homechart.findOne({ _id: 'homechart_singleton' })
 
   if (!chartLineData) {
     return
