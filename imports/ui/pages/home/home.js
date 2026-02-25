@@ -582,7 +582,7 @@ Template.appHome.onDestroyed(() => {
 // Reactive data source
 Template.appHome.helpers({
   chartData() {
-    return homechart.findOne()
+    return homechart.findOne({ _id: 'homechart_singleton' })
   },
   isChartDataReady() {
     return this.subscriptionsReady()

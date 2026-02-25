@@ -15,15 +15,10 @@ Template.peerstats.helpers({
     return moment(x).format('HH:mm D MMM YYYY')
   },
   zeroCheck() {
-    let ret = false
     const x = peerstats.findOne({ _id: 'peerstats_singleton' })
     if (x) {
-      if (x.peers_stat && x.peers_stat.length === 0) {
-        ret = true
-      }
-    } else {
-      ret = true
+      return !Array.isArray(x.peers_stat) || x.peers_stat.length === 0
     }
-    return ret
+    return true
   },
 })

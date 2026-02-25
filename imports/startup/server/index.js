@@ -13,7 +13,7 @@ import qrlAddressValdidator from '@theqrl/validate-qrl-address'
 import { JsonRoutes } from 'meteor/simple:json-routes'
 import { check, Match } from 'meteor/check'
 import { WebApp } from 'meteor/webapp'
-import { blockData, quantausd } from '/imports/api/index.js'
+import { blockData, quantausd, lasttx } from '/imports/api/index.js'
 import '/imports/startup/server/cron.js' /* eslint-disable-line */
 import { DDPRateLimiter } from 'meteor/ddp-rate-limiter'
 import {
@@ -1996,7 +1996,7 @@ Meteor.methods({
   async lasttxPaged() {
     console.log('lasttxPaged method called')
     this.unblock()
-    const res = await lasttx.findOneAsync()
+    const res = await lasttx.findOneAsync({ _id: 'lasttx_singleton' })
     return res || { transactions: [] }
   },
 })

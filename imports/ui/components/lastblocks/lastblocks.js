@@ -68,14 +68,16 @@ Template.lastblocks.helpers({
   totalPages() {
     const res = Blocks.findOne({ _id: 'blocks_singleton' })
     if (res && res.blockheaders) {
-      return Math.ceil(res.blockheaders.length / 10) || 1
+      const filteredHeaders = res.blockheaders.filter(bh => bh && bh.header)
+      return Math.ceil(filteredHeaders.length / 10) || 1
     }
     return 1
   },
   pages() {
     const res = Blocks.findOne({ _id: 'blocks_singleton' })
     if (res && res.blockheaders) {
-      const totalPages = Math.ceil(res.blockheaders.length / 10)
+      const filteredHeaders = res.blockheaders.filter(bh => bh && bh.header)
+      const totalPages = Math.ceil(filteredHeaders.length / 10)
       const pages = []
       for (let i = 1; i <= totalPages; i += 1) {
         pages.push({
@@ -105,7 +107,8 @@ Template.lastblocks.helpers({
   pforward() {
     const res = Blocks.findOne({ _id: 'blocks_singleton' })
     if (res && res.blockheaders) {
-      const totalPages = Math.ceil(res.blockheaders.length / 10)
+      const filteredHeaders = res.blockheaders.filter(bh => bh && bh.header)
+      const totalPages = Math.ceil(filteredHeaders.length / 10)
       const currentPage = parseInt(FlowRouter.getQueryParam('page'), 10) || 1
       return currentPage < totalPages
     }
@@ -215,7 +218,8 @@ Template.lastblocks.events({
     const currentPage = parseInt(FlowRouter.getQueryParam('page'), 10) || 1
     const res = Blocks.findOne({ _id: 'blocks_singleton' })
     if (res && res.blockheaders) {
-      const totalPages = Math.ceil(res.blockheaders.length / 10) || 1
+      const filteredHeaders = res.blockheaders.filter(bh => bh && bh.header)
+      const totalPages = Math.ceil(filteredHeaders.length / 10) || 1
       let newPage = currentPage
       if (action === 'forward') {
         newPage += 1
@@ -233,7 +237,8 @@ Template.lastblocks.events({
       let page = parseInt(event.target.value, 10)
       const res = Blocks.findOne({ _id: 'blocks_singleton' })
       if (res && res.blockheaders) {
-        const totalPages = Math.ceil(res.blockheaders.length / 10) || 1
+        const filteredHeaders = res.blockheaders.filter(bh => bh && bh.header)
+        const totalPages = Math.ceil(filteredHeaders.length / 10) || 1
         if (page < 1) page = 1
         if (page > totalPages) page = totalPages
         FlowRouter.setQueryParams({ page })

@@ -84,7 +84,7 @@ const refreshBlocks = async () => {
   let allHeaders = [...response.blockheaders, ...existingHeaders]
   const seenNumbers = new Set()
   allHeaders = allHeaders.filter((bh) => {
-    if (!bh || !bh.header || !bh.header.block_number) return false
+    if (!bh || !bh.header || bh.header.block_number === undefined || bh.header.block_number === null) return false
     if (seenNumbers.has(bh.header.block_number)) return false
     seenNumbers.add(bh.header.block_number)
     return true
@@ -95,7 +95,7 @@ const refreshBlocks = async () => {
 
   // Limit to 100 blocks
   if (allHeaders.length > 100) {
-    allHeaders = allHeaders.slice(0, 90) // Drop oldest 10 when we hit/exceed limit
+    allHeaders = allHeaders.slice(0, 100)
   }
 
   const merged = {
@@ -201,7 +201,7 @@ async function refreshLasttx() {
   )
 
   // Fetch current data
-  const currentDoc = await lasttx.findOneAsync()
+  const currentDoc = await lasttx.findOneAsync({ _id: 'lasttx_singleton' })
   const existingTransactions = (currentDoc && currentDoc.transactions) || []
 
   // Filter out existing confirmed transactions
@@ -222,7 +222,7 @@ async function refreshLasttx() {
 
   // Limit to 100 confirmed transactions
   if (allConfirmed.length > 100) {
-    allConfirmed = allConfirmed.slice(0, 90) // Drop oldest 10 when we hit/exceed limit
+    allConfirmed = allConfirmed.slice(0, 100)
   }
 
   const merged = {
