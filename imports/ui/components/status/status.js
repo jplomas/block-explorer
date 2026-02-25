@@ -1,4 +1,4 @@
-import { quantausd, Blocks } from '/imports/api/index.js'
+import { quantausd, Blocks, status } from '/imports/api/index.js'
 import './status.html'
 import { SHOR_PER_QUANTA } from '../../../startup/both/index.js'
 
