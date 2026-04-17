@@ -1012,7 +1012,7 @@ const getMultiSigAddressState = (request, callback) => {
   }
 }
 
-const getAddressStateAsync = (request) => new Promise((resolve, reject) => {
+export const getAddressStateAsync = (request) => new Promise((resolve, reject) => {
   getAddressState(request, (error, response) => {
     if (error) {
       reject(error)
