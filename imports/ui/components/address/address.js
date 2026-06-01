@@ -1267,6 +1267,13 @@ Template.address.events({
   },
 })
 
+Template.address.onCreated(() => {
+  Session.set('address', {})
+  if (FlowRouter.getParam('aId')) {
+    Session.set('addressLoading', true)
+  }
+})
+
 Template.address.onRendered(() => {
   // Initialize copySuccess session variable
   Session.set('copySuccess', false)
