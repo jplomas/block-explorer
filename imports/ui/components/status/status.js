@@ -1,6 +1,6 @@
 import { quantausd, Blocks, status } from '/imports/api/index.js'
 import './status.html'
-import { SHOR_PER_QUANTA } from '../../../startup/both/index.js'
+import { SHOR_PER_QUANTA, getCirculatingSupply } from '../../../startup/both/index.js'
 
 const supplyFormatter = new Intl.NumberFormat('en-US', {
   notation: 'compact',
@@ -68,15 +68,14 @@ Template.status.helpers({
     return currencyFormatter.format(quote.price)
   },
   marketCap() {
-    const x = status.findOne({ _id: 'status_singleton' })
+    const circulating = getCirculatingSupply(status.findOne({ _id: 'status_singleton' }))
     const quote = quantausd.findOne({ _id: 'quantausd_singleton' })
 
-    if (!x || !quote || !Number.isFinite(quote.price)) {
+    if (circulating === undefined || !quote || !Number.isFinite(quote.price)) {
       return '--'
     }
 
-    const coinsInCirculation = parseFloat(x.coins_emitted) / SHOR_PER_QUANTA
-    const marketCap = quote.price * coinsInCirculation
+    const marketCap = quote.price * circulating
     if (!Number.isFinite(marketCap)) {
       return '--'
     }
@@ -106,17 +105,9 @@ Template.status.helpers({
     return r
   },
   circulatingSupply() {
-    const x = status.findOne({ _id: 'status_singleton' })
-    if (!x) return '--'
-    try {
-      const total = parseFloat(x.coins_emitted) / SHOR_PER_QUANTA
-      const reserved = x.foundation_reserved || 0
-      let r = (total - reserved).toFixed(2)
-      r = r.toString().replace(/(\d)(?=(\d\d\d)+(?!\d))/g, '$1,')
-      return r
-    } catch (e) {
-      return 'Error parsing API results'
-    }
+    const circulating = getCirculatingSupply(status.findOne({ _id: 'status_singleton' }))
+    if (circulating === undefined) return '--'
+    return circulating.toFixed(2).replace(/(\d)(?=(\d\d\d)+(?!\d))/g, '$1,')
   },
   emission_raw() {
     const x = status.findOne({ _id: 'status_singleton' })

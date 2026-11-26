@@ -4,6 +4,13 @@ import { rawAddressToB32Address, rawAddressToHexAddress, b32AddressToRawAddress 
 // Define amount of SHOR contained per QUANTA (10^9)
 export const SHOR_PER_QUANTA = 1000000000
 
+export function getCirculatingSupply(stats) {
+  if (!stats || !Number.isFinite(stats.foundation_reserved)) return undefined
+  const emitted = parseFloat(stats.coins_emitted) / SHOR_PER_QUANTA
+  if (!Number.isFinite(emitted)) return undefined
+  return emitted - stats.foundation_reserved
+}
+
 // Explorer Version
 export const EXPLORER_VERSION = '1.6.1'
 

@@ -23,13 +23,20 @@ import {
 } from '/imports/api/index.js'
 
 import axios from 'axios'
-import { SHOR_PER_QUANTA, anyAddressToRaw } from '../both/index.js'
+import { SHOR_PER_QUANTA, anyAddressToRaw, getCirculatingSupply } from '../both/index.js'
 
 // Foundation addresses whose balances are excluded from circulating supply
 const FOUNDATION_ADDRESSES = [
   'Q000500997c93dec6039f0fb6008bbf034bc4f9252f6cfd41a7e01c8cf934036deaa4a832c4f240',
   'Q010500e587fd07bb1c5ace98956d9aa6c347e7114ccb4ec7183baa54804cc8b974e91cc3b5617e',
 ]
+
+const statsSelector = {
+  coins_emitted: { $exists: true },
+  'node_info.block_height': { $exists: true },
+}
+
+let cachedFoundationReserve
 
 const refreshBlocks = async () => {
   let response
@@ -278,6 +285,14 @@ async function refreshStats() {
   // Save status object with fixed ID to prevent flickering
   await status.upsertAsync({ _id: 'status_singleton' }, { $set: res })
 
+  // Backfill a reserve fetched before the first stats write, without overwriting a newer update.
+  if (cachedFoundationReserve !== undefined) {
+    await status.updateAsync(
+      { _id: 'status_singleton', foundation_reserved: { $exists: false } },
+      { $set: { foundation_reserved: cachedFoundationReserve } },
+    )
+  }
+
   // Start modifying data for home chart object
   const chartLineData = {
     labels: [],
@@ -415,14 +430,18 @@ async function refreshFoundationBalances() {
       FOUNDATION_ADDRESSES.map(async (addr) => {
         const request = { address: anyAddressToRaw(addr) }
         const response = await getAddressStateAsync(request)
-        return parseInt(response.state.balance, 10) || 0
+        const balance = parseInt(response.state.balance, 10)
+        if (!Number.isFinite(balance) || balance < 0) {
+          throw new Error('Invalid foundation balance')
+        }
+        return balance
       }),
     )
     const totalReservedShor = balances.reduce((sum, b) => sum + b, 0)
-    const totalReserved = totalReservedShor / SHOR_PER_QUANTA
-    await status.upsertAsync(
+    cachedFoundationReserve = totalReservedShor / SHOR_PER_QUANTA
+    await status.updateAsync(
       { _id: 'status_singleton' },
-      { $set: { foundation_reserved: totalReserved } },
+      { $set: { foundation_reserved: cachedFoundationReserve } },
     )
   } catch (error) {
     console.error('refreshFoundationBalances error:', error.message || error)
@@ -509,7 +528,7 @@ Meteor.setTimeout(async () => {
 
 JsonRoutes.add('get', '/api/emission', async (req, res) => {
   let response = {}
-  const queryResults = await status.findOneAsync()
+  const queryResults = await status.findOneAsync(statsSelector)
   if (queryResults !== undefined) {
     // cached transaction located
     const emission = parseInt(queryResults.coins_emitted, 10) / SHOR_PER_QUANTA
@@ -524,7 +543,7 @@ JsonRoutes.add('get', '/api/emission', async (req, res) => {
 
 JsonRoutes.add('get', '/api/emission/text', async (req, res) => {
   let response = {}
-  const queryResults = await status.findOneAsync()
+  const queryResults = await status.findOneAsync(statsSelector)
   if (queryResults !== undefined) {
     // cached transaction located
     const emission = parseInt(queryResults.coins_emitted, 10) / SHOR_PER_QUANTA
@@ -540,7 +559,7 @@ JsonRoutes.add('get', '/api/emission/text', async (req, res) => {
 // Total supply (alias for emission)
 JsonRoutes.add('get', '/api/total', async (req, res) => {
   let response = {}
-  const queryResults = await status.findOneAsync()
+  const queryResults = await status.findOneAsync(statsSelector)
   if (queryResults !== undefined) {
     const total = parseInt(queryResults.coins_emitted, 10) / SHOR_PER_QUANTA
     response = { found: true, total }
@@ -554,7 +573,7 @@ JsonRoutes.add('get', '/api/total', async (req, res) => {
 
 JsonRoutes.add('get', '/api/total/text', async (req, res) => {
   let response = {}
-  const queryResults = await status.findOneAsync()
+  const queryResults = await status.findOneAsync(statsSelector)
   if (queryResults !== undefined) {
     const total = parseInt(queryResults.coins_emitted, 10) / SHOR_PER_QUANTA
     response = total
@@ -569,11 +588,8 @@ JsonRoutes.add('get', '/api/total/text', async (req, res) => {
 // Circulating supply = total emitted minus foundation reserved balances
 JsonRoutes.add('get', '/api/circulating', async (req, res) => {
   let response = {}
-  const queryResults = await status.findOneAsync()
-  if (queryResults !== undefined) {
-    const total = parseInt(queryResults.coins_emitted, 10) / SHOR_PER_QUANTA
-    const reserved = queryResults.foundation_reserved || 0
-    const circulating = total - reserved
+  const circulating = getCirculatingSupply(await status.findOneAsync(statsSelector))
+  if (circulating !== undefined) {
     response = { found: true, circulating }
   } else {
     response = { found: false, message: 'API error', code: 5001 }
@@ -585,11 +601,8 @@ JsonRoutes.add('get', '/api/circulating', async (req, res) => {
 
 JsonRoutes.add('get', '/api/circulating/text', async (req, res) => {
   let response = {}
-  const queryResults = await status.findOneAsync()
-  if (queryResults !== undefined) {
-    const total = parseInt(queryResults.coins_emitted, 10) / SHOR_PER_QUANTA
-    const reserved = queryResults.foundation_reserved || 0
-    const circulating = total - reserved
+  const circulating = getCirculatingSupply(await status.findOneAsync(statsSelector))
+  if (circulating !== undefined) {
     response = circulating
   } else {
     response = 'Error'
@@ -601,7 +614,7 @@ JsonRoutes.add('get', '/api/circulating/text', async (req, res) => {
 
 JsonRoutes.add('get', '/api/reward', async (req, res) => {
   let response = {}
-  const queryResults = await status.findOneAsync()
+  const queryResults = await status.findOneAsync(statsSelector)
   if (queryResults !== undefined) {
     // cached transaction located
     const reward = parseFloat(queryResults.block_last_reward) / SHOR_PER_QUANTA
@@ -616,7 +629,7 @@ JsonRoutes.add('get', '/api/reward', async (req, res) => {
 
 JsonRoutes.add('get', '/api/reward/text', async (req, res) => {
   let response = {}
-  const queryResults = await status.findOneAsync()
+  const queryResults = await status.findOneAsync(statsSelector)
   if (queryResults !== undefined) {
     // cached transaction located
     const reward = parseFloat(queryResults.block_last_reward) / SHOR_PER_QUANTA
@@ -631,7 +644,7 @@ JsonRoutes.add('get', '/api/reward/text', async (req, res) => {
 
 JsonRoutes.add('get', '/api/rewardshor', async (req, res) => {
   let response = {}
-  const queryResults = await status.findOneAsync()
+  const queryResults = await status.findOneAsync(statsSelector)
   if (queryResults !== undefined) {
     // cached transaction located
     const reward = parseFloat(queryResults.block_last_reward)
@@ -646,7 +659,7 @@ JsonRoutes.add('get', '/api/rewardshor', async (req, res) => {
 
 JsonRoutes.add('get', '/api/rewardshor/text', async (req, res) => {
   let response = {}
-  const queryResults = await status.findOneAsync()
+  const queryResults = await status.findOneAsync(statsSelector)
   if (queryResults !== undefined) {
     // cached transaction located
     const reward = parseFloat(queryResults.block_last_reward)
@@ -661,7 +674,7 @@ JsonRoutes.add('get', '/api/rewardshor/text', async (req, res) => {
 
 JsonRoutes.add('get', '/api/blockheight', async (req, res) => {
   let response = {}
-  const queryResults = await status.findOneAsync()
+  const queryResults = await status.findOneAsync(statsSelector)
   if (queryResults !== undefined) {
     // cached transaction located
     const blockheight = parseInt(queryResults.node_info.block_height, 10)
@@ -676,7 +689,7 @@ JsonRoutes.add('get', '/api/blockheight', async (req, res) => {
 
 JsonRoutes.add('get', '/api/blockheight/text', async (req, res) => {
   let response = {}
-  const queryResults = await status.findOneAsync()
+  const queryResults = await status.findOneAsync(statsSelector)
   if (queryResults !== undefined) {
     // cached transaction located
     const blockheight = parseInt(queryResults.node_info.block_height, 10)
@@ -691,7 +704,7 @@ JsonRoutes.add('get', '/api/blockheight/text', async (req, res) => {
 
 JsonRoutes.add('get', '/api/status', async (req, res) => {
   let response = {}
-  const queryResults = await status.findOneAsync()
+  const queryResults = await status.findOneAsync(statsSelector)
   if (queryResults !== undefined) {
     // cached transaction located
     response = queryResults

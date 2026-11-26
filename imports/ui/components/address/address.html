@@ -817,7 +817,9 @@
 
 <template name="otsTrackerTemplate">
   {{#if otsTrackerData}}
-    {{#if otsTrackerData.error}}
+    {{#if otsTrackerData.loading}}
+      <div class="p-2 text-center text-xs text-gray-400" role="status">Loading OTS data…</div>
+    {{else if otsTrackerData.error}}
       <div class="p-2 text-center text-xs text-red-400">{{otsTrackerData.error}}</div>
     {{else}}
       {{#if otsTrackerData.empty}}

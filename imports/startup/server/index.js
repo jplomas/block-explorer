@@ -904,11 +904,11 @@ const getOTSAsync = (request) => new Promise((resolve, reject) => {
 const getFullAddressState = (request, callback) => {
   try {
     qrlApi('GetAddressState', request, (error, response) => {
-      if (error) {
+      if (error || !response || !response.state) {
         const myError = errorCallback(
-          error,
-          'Cannot access API/GetOptimizedAddressState',
-          '**ERROR/getAddressState** ',
+          error || 'Missing address state',
+          'Cannot access API/GetAddressState',
+          '**ERROR/GetAddressState**',
         )
         callback(myError, null)
       } else {

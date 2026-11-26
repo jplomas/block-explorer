@@ -328,9 +328,10 @@ const renderAddressBlock = (aId, page, computation) => {
     const otsRequest = {
       address: request.address, page_from: 1, page_count: 1, unused_ots_index_from: 0,
     }
+    Session.set('OTStracker', { loading: true })
     callForAddress(computation, 'getOTS', [otsRequest], (otsError, otsResult) => {
-      if (otsError) {
-        console.error('OTS API error:', otsError)
+      if (otsError || !otsResult) {
+        console.error('OTS API error:', otsError || 'Missing OTS response')
         Session.set('OTStracker', { error: 'Unable to load OTS data' })
         return
       }
